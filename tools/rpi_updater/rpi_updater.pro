@@ -26,11 +26,13 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    fileselector.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    fileselector.h
 
 FORMS    += mainwindow.ui
 
-LIBS += -L/usr/lib -lboost_system -lboost_filesystem
+LIBS += -L/usr/lib
 INCLUDEPATH += /usr/include

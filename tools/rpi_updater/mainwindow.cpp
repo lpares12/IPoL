@@ -4,9 +4,19 @@
 #include <QDebug>
 #include <QString>
 #include <QDirIterator>
+#include <QTreeWidget>
+#include <QSet>
+#include <QPersistentModelIndex>
+#include <QProcess>
 
-#include <boost/filesystem.hpp>
+#include <fileselector.h>
+
 #include <cstdlib>
+
+// TODO: set into a textbox of the UI
+#define RPI_IP  "192.168.1.65"
+#define RPI_USER    "pi"
+#define RPI_FOLDER  "/tfg"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -14,7 +24,13 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    listDirectoryTree();
+    std::string pathStr(std::getenv("HOME"));
+    pathStr += "/workspaces/IPoL.git/trunk/";
+
+    fileSelector_ = new FileSelector(pathStr.c_str(), this);
+
+    ui->fileTree_->setModel(fileSelector_);
+    ui->fileTree_->setRootIndex(fileSelector_->index("/home/ubuntuk/workspaces/IPoL.git/trunk/"));
 }
 
 MainWindow::~MainWindow()
@@ -22,36 +38,54 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::listDirectoryTree()
+void MainWindow::on_updateBtn__clicked()
+{
+    std::vector<std::string> toSync;
+
+    QSet<QPersistentModelIndex> *checked = fileSelector_->getToSyncList();
+    QSet<QPersistentModelIndex>::iterator it;
+    for(it = checked->begin(); it != checked->end(); it++)
+    {
+        std::string fileToAdd = fileSelector_->filePath(*it).toStdString();
+        //if(fileSelector_->isDir(*it)) fileToAdd += "/";
+        toSync.push_back(fileToAdd);
+    }
+
+    syncFiles(toSync);
+}
+
+void MainWindow::syncFiles(std::vector<std::string> toSync)
 {
     std::string pathStr(std::getenv("HOME"));
     pathStr += "/workspaces/IPoL.git/trunk/";
-/*
-    using namespace boost::filesystem;
-    path p(pathStr.c_str());
-    recursive_directory_iterator dir(p), end;
+    std::string::size_type size = pathStr.length();
 
-    while(dir != end)
+    for(unsigned int i = 0; i < toSync.size(); i++)
     {
-//        if (dir->path().filename() == exclude_this_directory)
-//        {
-//            dir.no_push(); // don't recurse into this directory.
-//        }
-        qInfo() << QString::fromStdString(dir->path().string());
-        ++dir;
-    } */
+        // get the file relative to trunk/
+        std::string destFolder = toSync[i];
+        destFolder.erase(0, size);
 
-    if(!QDir(QString::fromStdString(pathStr)).exists()) qInfo() << "Does not exist";
-    else
-    {
-        QDirIterator it(pathStr.c_str(), QDirIterator::Subdirectories);
-        while(it.hasNext())
-        {
-            if(it.fileName() != QString::fromStdString(".") && it.fileName() != QString::fromStdString(".."))
-            {
-                qInfo() << it.filePath();
-            }
-            it.next();
-        }
+        // create string with rsync command
+        std::string rsync = "/bin/bash -c \"rsync -aR "; // -R to maintain the directory structure
+        rsync += pathStr;
+        rsync += "./";
+        rsync += destFolder;
+        rsync += " ";
+        rsync += RPI_USER;
+        rsync += "@";
+        rsync += RPI_IP;
+        rsync += ":";
+        rsync += RPI_FOLDER;
+        rsync += " \"";
+        //qInfo() << QString::fromStdString(rsync);
+
+        // Execute rsync command
+        QProcess process;
+        process.start(QString::fromStdString(rsync));
+        process.waitForFinished(-1);
+        QByteArray error = process.readAllStandardError();
+        qDebug() << error;
     }
 }
+
