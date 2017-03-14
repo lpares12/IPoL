@@ -2,12 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-
 #include <vector>
-
-// todo: remove
-#include <QDir>
-//
 
 #include "fileselector.h"
 
@@ -31,7 +26,6 @@ private:
 
     FileSelector *fileSelector_;
 
-    std::vector<QDir> listDirectoryTree();
     void syncFiles(std::vector<std::string> toSync);
 };
 

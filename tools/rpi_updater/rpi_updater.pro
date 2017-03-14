@@ -26,13 +26,15 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 
 SOURCES += main.cpp\
-        mainwindow.cpp \
-    fileselector.cpp
+        src/mainwindow.cpp \
+    src/fileselector.cpp
 
-HEADERS  += mainwindow.h \
-    fileselector.h
+HEADERS  += hdr/mainwindow.h \
+    hdr/fileselector.h
 
 FORMS    += mainwindow.ui
+
+RESOURCES += resources.qrc
 
 LIBS += -L/usr/lib
 INCLUDEPATH += /usr/include

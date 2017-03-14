@@ -10,6 +10,18 @@
     <height>335</height>
    </rect>
   </property>
+  <property name="minimumSize">
+   <size>
+    <width>522</width>
+    <height>335</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>522</width>
+    <height>335</height>
+   </size>
+  </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
@@ -27,14 +39,43 @@
    <widget class="QPushButton" name="updateBtn_">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>409</x>
       <y>250</y>
-      <width>80</width>
+      <width>101</width>
       <height>22</height>
      </rect>
     </property>
     <property name="text">
      <string>Update Code</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="ipField_">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>250</y>
+      <width>113</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>RPi IP</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="ipHelp_">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>257</y>
+      <width>16</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+    <property name="pixmap">
+     <pixmap resource="resources/resources.qrc">:/images/info.png</pixmap>
     </property>
    </widget>
   </widget>
@@ -44,7 +85,7 @@
      <x>0</x>
      <y>0</y>
      <width>522</width>
-     <height>19</height>
+     <height>22</height>
     </rect>
    </property>
   </widget>
@@ -59,6 +100,8 @@
   <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
- <resources/>
+ <resources>
+  <include location="resources/resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

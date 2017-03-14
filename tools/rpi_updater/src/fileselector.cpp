@@ -1,4 +1,4 @@
-#include "fileselector.h"
+#include "hdr/fileselector.h"
 
 #include <QDebug>
 
@@ -20,17 +20,19 @@ bool FileSelector::setData(const QModelIndex& index, const QVariant& value, int 
         if(value == Qt::Checked)
         {
             toSync_.insert(index);
-            for(int i = 0; i < list.size(); i++)
+            checklist_.insert(index);
+            for(int i = 1; i < list.size(); i++)
             {
+                toSync_.remove(list[i]); // Remove childs from toSync list
                 checklist_.insert(list[i]);
                 emit dataChanged(list[i], list[i]);
             }
         }
         else if(value == Qt::Unchecked)
         {
-            toSync_.remove(index);
             for(int i = 0; i < list.size(); i++)
             {
+                toSync_.remove(list[i]);
                 checklist_.remove(list[i]);
                 emit dataChanged(list[i], list[i]);
             }
