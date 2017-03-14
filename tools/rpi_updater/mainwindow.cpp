@@ -30,7 +30,7 @@ MainWindow::MainWindow(QWidget *parent) :
     fileSelector_ = new FileSelector(pathStr.c_str(), this);
 
     ui->fileTree_->setModel(fileSelector_);
-    ui->fileTree_->setRootIndex(fileSelector_->index("/home/ubuntuk/workspaces/IPoL.git/trunk/"));
+    ui->fileTree_->setRootIndex(fileSelector_->index(pathStr.c_str()));
 }
 
 MainWindow::~MainWindow()
