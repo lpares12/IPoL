@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>522</width>
-    <height>335</height>
+    <height>357</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>522</width>
-    <height>335</height>
+    <height>357</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>522</width>
-    <height>335</height>
+    <height>357</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -75,7 +75,20 @@
      <string/>
     </property>
     <property name="pixmap">
-     <pixmap resource="resources/resources.qrc">:/images/info.png</pixmap>
+     <pixmap resource="resources.qrc">:/resources/images/info.png</pixmap>
+    </property>
+   </widget>
+   <widget class="QLabel" name="outputLabel_">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>280</y>
+      <width>491</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
     </property>
    </widget>
   </widget>
@@ -101,7 +114,7 @@
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources>
-  <include location="resources/resources.qrc"/>
+  <include location="resources.qrc"/>
  </resources>
  <connections/>
 </ui>

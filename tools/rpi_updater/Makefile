@@ -355,13 +355,16 @@ compiler_clean: compiler_rcc_clean compiler_moc_header_clean compiler_uic_clean
 
 ####### Compile
 
-main.o: main.cpp 
+main.o: main.cpp hdr/mainwindow.h \
+		hdr/fileselector.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o main.cpp
 
-mainwindow.o: src/mainwindow.cpp ui_mainwindow.h
+mainwindow.o: src/mainwindow.cpp hdr/mainwindow.h \
+		hdr/fileselector.h \
+		ui_mainwindow.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow.o src/mainwindow.cpp
 
-fileselector.o: src/fileselector.cpp 
+fileselector.o: src/fileselector.cpp hdr/fileselector.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o fileselector.o src/fileselector.cpp
 
 qrc_resources.o: qrc_resources.cpp 

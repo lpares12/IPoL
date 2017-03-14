@@ -52,7 +52,7 @@ def setIntegrationTime(bus, manual=False, avtivate=True):
 	# TODO: if manual: set it/unset it manually
 	# todo: pagina 20 mirar instruccion
 	if manual:
-		if active:
+		if activate:
 			bus.write_byte_data(TSL2561_ADDRESS, TSL2561_COMMAND_BIT | TSL2561_REGISTER_TIMING, TSL2561_VALUE_GAIN_16X | TSL2561_VALUE_INTEGRATION_MANUAL | TSL2561_VALUE_INTEGRATION_IGNORE)
 		else:
 			bus.write_byte_data(TSL2561_ADDRESS, TSL2561_COMMAND_BIT | TSL2561_REGISTER_TIMING, TSL2561_VALUE_GAIN_16X | TSL2561_VALUE_INTEGRATION_IGNORE)

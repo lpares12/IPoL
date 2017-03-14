@@ -22,6 +22,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    this->setWindowTitle("Raspberry Pi Updater");
 
     std::string pathStr(std::getenv("HOME"));
     pathStr += "/workspaces/IPoL.git/trunk/";
@@ -87,13 +88,23 @@ void MainWindow::syncFiles(std::vector<std::string> toSync)
             rsync += RPI_FOLDER;
             rsync += " \"";
 
+            std::string syncing = "Syncing (";
+            syncing += ip;
+            syncing += "):";
+            syncing += destFolder;
+            ui->outputLabel_->setText(QString::fromStdString(syncing));
+            ui->outputLabel_->repaint();
+
             // Execute rsync command
             QProcess process;
             process.start(QString::fromStdString(rsync));
             process.waitForFinished(-1);
             QByteArray error = process.readAllStandardError();
             if(error != "") qInfo() << error;
+            ui->outputLabel_->setText("");
         }
     }
+
+    ui->outputLabel_->setText("Transfer done");
 }
 
