@@ -1,3 +1,5 @@
+# Calculates Derive Time
+
 import sys
 import smbus
 from time import sleep, time
@@ -51,56 +53,48 @@ def getLuminosity(bus):
 
     return (higher << 8 | lower)
 
-# threshold defines the value which we will consider as one.
-# the range for considering a bit as zero is from 0 to threshold-1
-# to consider a bit as one it will be from threshold to infinite
-# More levels can be added, to read x2 bits at a time, for example
-def readByte(bus, zeroValue):
-    result = 0
 
+def calculateGap(bus, integrationTime, threshold):
+    enable(bus)
+
+    result = 0
+    # Print how much time it takes for each iteration.
+    start_time = time()
     for i in range(8):
         startIntegration(bus)
-        sleep(0.025)
+        sleep(integrationTime)
         stopIntegration(bus)
         newValue = getLuminosity(bus)
-        if newValue > (zeroValue+70):
+        if newValue > (threshold):
             # A 1 was read
             result = ((result << 1) + 1)
         else:
             # A 0 was read
             result = (result << 1)
-    print result
 
+    totalTime = time() - start_time # ignore sleep time, and calculate avg execution time  for each iteration.
+    disable(bus)
 
+    return ((totalTime-(integrationTime*8))/8)
+
+# for i in 0.025 0.05 0.075 0.1 0.15 0.2 0.25 0.3 0.4 0.5 0.75 1; do python calculateGapTime.py $i 3; sleep 1; done
 def main():
+    integrationTime = float(sys.argv[1])
+    iterations = int(sys.argv[2])
+    print("Integration time: %s" % integrationTime) 
+    threshold = 100 # Not important for this calculation
+
     bus = smbus.SMBus(1)
 
     if not begin(bus):
         print "Sensor not found"
         sys.exit()
 
-    enable(bus)
-
-    startIntegration(bus)
-    sleep(0.025)
-    stopIntegration(bus)
-    oldValue = getLuminosity(bus)
-
-    # Wait for start connection bit
-    while(True):
-        startIntegration(bus)
-        sleep(0.025)
-        stopIntegration(bus)
-        value = getLuminosity(bus)
-
-        # If start connection bit received
-        if value > (oldValue+70):
-            readByte(bus, oldValue)
-            break
-
-
-    disable(bus)
-
+    value = 0
+    for i in range(iterations):
+        value += calculateGap(bus, integrationTime, threshold)
+    
+    print("Iteration time: %s\n" % (value/iterations))
 
 if __name__ == '__main__':
     main()
