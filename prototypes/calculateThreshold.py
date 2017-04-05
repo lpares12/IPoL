@@ -1,7 +1,6 @@
-# Calculates Derive Time
-
 import sys
 import smbus
+import RPi.GPIO as GPIO
 from time import sleep, time
 
 TSL2561_ADDRESS = 0x39
@@ -53,48 +52,88 @@ def getLuminosity(bus):
 
     return (higher << 8 | lower)
 
+def getLuminosityLine(bus, sleepTime, numIterations):
 
-def calculateGap(bus, integrationTime, threshold):
+    high100 = []
+    high75 = []
+    high50 = []
+    high25 = []
+    high0 = []
+
     enable(bus)
 
-    result = 0
-    # Print how much time it takes for each iteration.
-    start_time = time()
-    for i in range(8):
+    for i in range(numIterations):
+        # HIGH 100%
+        GPIO.output(18, GPIO.HIGH)
         startIntegration(bus)
-        sleep(integrationTime)
-        stopIntegration(bus)
-        newValue = getLuminosity(bus)
-        if newValue > (threshold):
-            # A 1 was read
-            result = ((result << 1) + 1)
-        else:
-            # A 0 was read
-            result = (result << 1)
+        sleep(sleepTime)
+        sleep(sleepTime)
+        stopIntegration(bus)    
+        high100.append(getLuminosity(bus))
 
-    totalTime = time() - start_time # ignore sleep time, and calculate avg execution time  for each iteration.
+        # HIGH 75%
+        GPIO.output(18, GPIO.HIGH)
+        startIntegration(bus)
+        sleep(sleepTime + sleepTime/2)
+        GPIO.output(18, GPIO.LOW)
+        sleep(sleepTime/2)
+        stopIntegration(bus)
+        high75.append(getLuminosity(bus))
+
+        # HIGH 50%
+        GPIO.output(18, GPIO.HIGH)
+        startIntegration(bus)
+        sleep(sleepTime)
+        GPIO.output(18, GPIO.LOW)
+        sleep(sleepTime)
+        stopIntegration(bus)    
+        high50.append(getLuminosity(bus))
+
+        # HIGH 25%
+        GPIO.output(18, GPIO.HIGH)
+        startIntegration(bus)
+        sleep(sleepTime/2)
+        GPIO.output(18, GPIO.LOW)
+        sleep(sleepTime + sleepTime/2)
+        stopIntegration(bus)
+        high25.append(getLuminosity(bus))
+
+        # HIGH 0%
+        GPIO.output(18, GPIO.LOW)
+        startIntegration(bus)
+        sleep(sleepTime)
+        sleep(sleepTime)
+        stopIntegration(bus)    
+        high0.append(getLuminosity(bus))
+
     disable(bus)
 
-    return ((totalTime-(integrationTime*8))/8)
+    print "High 100%:", sum(high100)/numIterations
+    print "High 75%:", sum(high75)/numIterations
+    print "High 50%:", sum(high50)/numIterations
+    print "High 25%:", sum(high25)/numIterations
+    print "High 0%:", sum(high0)/numIterations
 
-# for i in 0.025 0.05 0.075 0.1 0.15 0.2 0.25 0.3 0.4 0.5 0.75 1; do python calculateGapTime.py $i 3; sleep 1; done
+
+# for i in 0.025 0.05 0.075 0.1 0.15 0.2 0.25 0.3 0.4 0.5 0.75 1; do python calculateThreshold.py $i 3; sleep 1; done
 def main():
     integrationTime = float(sys.argv[1])
-    iterations = int(sys.argv[2])
-    print("Integration time: %s" % integrationTime)
-    threshold = 100 # Not important for this calculation
+    sleepTime = integrationTime/2
+    numIterations = int(sys.argv[2])
 
+    print("Integration time: %s" % integrationTime)
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.setup(18, GPIO.OUT)
     bus = smbus.SMBus(1)
 
     if not begin(bus):
         print "Sensor not found"
         sys.exit()
 
-    value = 0
-    for i in range(iterations):
-        value += calculateGap(bus, integrationTime, threshold)
-    
-    print("Iteration time: %s\n" % (value/iterations))
+    getLuminosityLine(bus, sleepTime, numIterations)
 
+    
 if __name__ == '__main__':
     main()

@@ -55,23 +55,34 @@ def getLuminosity(bus):
 # the range for considering a bit as zero is from 0 to threshold-1
 # to consider a bit as one it will be from threshold to infinite
 # More levels can be added, to read x2 bits at a time, for example
-def readByte(bus, zeroValue):
+def readByte(bus):
+    oldValue = 0
     result = 0
 
     for i in range(8):
         startIntegration(bus)
-        sleep(0.025)
+        sleep(0.1)
         stopIntegration(bus)
         newValue = getLuminosity(bus)
-        if newValue > (zeroValue+70):
-            # A 1 was read
-            result = ((result << 1) + 1)
+        if newValue > 310:
+            if newValue > 320:
+                oldValue = 1
+                result = ((result << 1) + 1)
+            elif oldValue == 1:
+                # A 0 was read
+                oldValue = 0
+                result = (result << 1)
+            else:
+                # A 1 was read
+                oldValue = 1
+                result = ((result << 1) + 1)
         else:
             # A 0 was read
+            oldValue = 0
             result = (result << 1)
     print result
 
-
+# TODO: DELETE HARDCODING FOR 0.1
 def main():
     bus = smbus.SMBus(1)
 
@@ -81,21 +92,16 @@ def main():
 
     enable(bus)
 
-    startIntegration(bus)
-    sleep(0.025)
-    stopIntegration(bus)
-    oldValue = getLuminosity(bus)
-
     # Wait for start connection bit
     while(True):
         startIntegration(bus)
-        sleep(0.025)
+        sleep(0.1)
         stopIntegration(bus)
         value = getLuminosity(bus)
 
         # If start connection bit received
-        if value > (oldValue+70):
-            readByte(bus, oldValue)
+        if value > 310:
+            readByte(bus)
             break
 
 
