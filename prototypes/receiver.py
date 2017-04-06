@@ -59,7 +59,7 @@ def readByte(bus):
     oldValue = 0
     result = 0
 
-    for i in range(8):
+    for i in range(64):
         startIntegration(bus)
         sleep(0.1)
         stopIntegration(bus)
