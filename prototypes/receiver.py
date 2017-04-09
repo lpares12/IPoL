@@ -51,21 +51,17 @@ def getLuminosity(bus):
 
     return (higher << 8 | lower)
 
-# threshold defines the value which we will consider as one.
-# the range for considering a bit as zero is from 0 to threshold-1
-# to consider a bit as one it will be from threshold to infinite
-# More levels can be added, to read x2 bits at a time, for example
-def readByte(bus):
+def read(bus, integrationTime, lowerThreshold, upperThreshold):
     oldValue = 0
     result = 0
 
-    for i in range(64):
+    for i in range(8): # byte
         startIntegration(bus)
-        sleep(0.1)
+        sleep(integrationTime)
         stopIntegration(bus)
         newValue = getLuminosity(bus)
-        if newValue > 310:
-            if newValue > 320:
+        if newValue > lowerThreshold:
+            if newValue > upperThreshold:
                 oldValue = 1
                 result = ((result << 1) + 1)
             elif oldValue == 1:
@@ -80,10 +76,22 @@ def readByte(bus):
             # A 0 was read
             oldValue = 0
             result = (result << 1)
-    print result
+    return result
 
-# TODO: DELETE HARDCODING FOR 0.1
+# python receiver.py 256 0.025 77 81
+# python receiver.py 256 0.05 157 160
+# python receiver.py 256 0.1 310 320
+# python receiver.py 256 0.15 470 475
+# python receiver.py 256 0.20 627 632
 def main():
+    bits = int(sys.argv[1])
+    integrationTime = float(sys.argv[2])
+    lowerThreshold = int(sys.argv[3])
+    upperThreshold = int(sys.argv[4])
+
+    bytesCount = bits/8
+    result = []
+
     bus = smbus.SMBus(1)
 
     if not begin(bus):
@@ -95,18 +103,20 @@ def main():
     # Wait for start connection bit
     while(True):
         startIntegration(bus)
-        sleep(0.1)
+        sleep(integrationTime)
         stopIntegration(bus)
         value = getLuminosity(bus)
 
         # If start connection bit received
-        if value > 310:
-            readByte(bus)
+        if value > lowerThreshold:
+            for i in range(bytesCount):
+                result.append(read(bus, integrationTime, lowerThreshold, upperThreshold))
             break
 
 
     disable(bus)
 
+    print result
 
 if __name__ == '__main__':
     main()
