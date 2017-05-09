@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 
 #include <sys/ioctl.h>
@@ -8,6 +9,33 @@
 #include <netinet/in.h> // to solve incomplete-type errors
 #include <linux/if.h>
 #include <linux/if_tun.h>
+
+
+char* fake_ping_response(char *packet, size_t size) {
+	char src_ip[4], dst_ip[4], identifier[2], sequence_number[2];
+
+	memcpy(&src_ip, (packet+12), 4);
+	memcpy(&dst_ip, (packet+16), 4);
+	printf("Src IP: %d.%d.%d.%d\n", src_ip[0], src_ip[1], src_ip[2], src_ip[3]);
+	printf("Dst IP: %d.%d.%d.%d\n", dst_ip[0], dst_ip[1], dst_ip[2], dst_ip[3]);
+
+	memcpy(&identifier, (packet+24), 2);
+	memcpy(&sequence_number, (packet+26), 2);
+
+	char *response = (char *) malloc(size);
+
+	if(response == NULL) {
+		printf("Error allocating memory for response\n");
+	} else {
+		memset(response, 0, size);
+		memcpy(response, packet, size);
+
+		memcpy((response+12), &dst_ip, 4);
+		memcpy((response+16), &src_ip, 4);
+		response[8] = 255;
+	}
+	return response;
+}
 
 /**
  * @param dev Name of the interface
@@ -51,15 +79,16 @@ int main() {
 
 	// Allocate a tun interface without added bytes to the IP packet
 	tunfd = tun_alloc(tun_name, IFF_TUN | IFF_NO_PI);
-
-	if(ioctl(tunfd, TUNSETPERSIST, 0) < 0) {
-		printf("Error disabling tunsetpersist");
+	if(tunfd < 0) {
+		printf("File descriptor error: %d\n", tunfd);
 		exit(1);
 	}
 
-	//sprintf(setup,"/tfg/net_driver/tun_setup.sh %s", tun_name);
-	//sprintf(setup, "/tfg/net_driver/tun_setup.sh");
-	//system(setup);
+
+	if(ioctl(tunfd, TUNSETPERSIST, 0) < 0) {
+		printf("Error disabling tunsetpersist\n");
+		exit(1);
+	}
 
 	// Setup interface
 	sprintf(setup, "sudo ip link set %s mtu 500 up", tun_name);
@@ -74,7 +103,7 @@ int main() {
 	//
 
 	while(1) {
-		int bytes_read;
+		size_t bytes_read;
 		char buffer[500]; // MTU_SIZE
 		bytes_read = read(tunfd, buffer, sizeof(buffer));
 		if(bytes_read < 0) {
@@ -85,12 +114,28 @@ int main() {
 
 		printf("Read %d bytes\n", bytes_read);
 
-		printf("Protocol: 0x%02x\n", buffer[9]); // 6 is TCP!
+		unsigned int protocol = buffer[9];
+		if(protocol == 1) {
+			unsigned int type = buffer[20];
+			if(type == 8) {
+				printf("Received a ping\n");
+				char *response = fake_ping_response(&buffer[0], bytes_read);
+				size_t bytes_written = write(tunfd, response, bytes_read);
+				if(bytes_written > 0) {
+					printf("Written %d bytes\n");
+				}
+			} else {
+				printf("Type unknown\n");
+			}
+		}
+		
+		/*
 		int i;
 		for(i = 0; i < bytes_read; i++) {
 			printf("0x%02x ", buffer[i]);
 		}
 		printf("\n");
+		*/
 	}
 
 	close(tunfd);
