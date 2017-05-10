@@ -10,7 +10,7 @@ def log(file, text):
 
 logFile = open("/tmp/ipol.log", "w")
 
-socketAddress = './ipol_recv'
+socketAddress = '/tmp/ipol_recv'
 
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 

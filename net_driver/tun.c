@@ -30,9 +30,13 @@ int sendPacket(int tunfd, int senderfd) {
 	}
 	printf("Read %d bytes\n", bytes_tosend);
 
-	// Todo: transfer it to sender.py
+	// Sending size of the packet
+	write(senderfd, (void *)&bytes_tosend, sizeof(bytes_tosend)); // size_t is 4 bytes at rpi
+	// Sending the packet
 	size_t bytes_written = write(senderfd, toSend, bytes_tosend);
 	printf("Bytes written: %zu\n", bytes_written);
+
+	return 0;
 }
 
 /**
@@ -128,12 +132,12 @@ int main() {
 	}
 	///////
 
-	sleep(3);
+	sleep(1);
 
 	///////
 	// Connect with sending script
 	struct sockaddr_un server_addr;
-	char *server_path = "./ipol_send";
+	char *server_path = "/tmp/ipol_send";
 	if((senderfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
 		printf("Sender socket error\n");
 		exit(1);
@@ -162,8 +166,10 @@ int main() {
 	sprintf(setup, "sudo ip link set %s mtu 500 up", tun_name);
 	system(setup);
 
-	sprintf(host_ip, "10.0.0.1"); // Should be taken from environment variable
-	sprintf(peer_ip, "10.0.0.2"); // Should be taken from environment variable
+	printf("IP: %s\n", getenv("HOST_IP"));
+	printf("IP: %s\n", getenv("PEER_IP"));
+	sprintf(host_ip, getenv("HOST_IP")); // Set in .bashrc
+	sprintf(peer_ip, getenv("PEER_IP")); // Set in .bashrc
 	sprintf(setup, "sudo ip addr add %s dev %s peer %s", host_ip, tun_name, peer_ip);
 	system(setup);
 	///////
