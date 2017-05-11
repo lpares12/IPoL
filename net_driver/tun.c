@@ -26,6 +26,7 @@ int sendPacket(int tunfd, int senderfd) {
 	if(bytes_tosend < 0) {
 		printf("Error reading bytes");
 		close(tunfd);
+		close(senderfd);
 		return -1;
 	}
 	printf("Read %d bytes\n", bytes_tosend);
@@ -42,21 +43,82 @@ int sendPacket(int tunfd, int senderfd) {
 /**
  * Called whenever a reading operation is possible from receiver.py.
  */
-void recvPacket(int tunfd) {
+int recvPacket(int tunfd, int receiverfd) {
 	printf("Ready to send to tun0\n");
 
 	char response[500];
 	size_t bytes_tosend;
-	// Todo: read from receiver.py
-	
-	// Todo: Transfer to tun0 interface
-	/*
+
+	// Read from receiver.py
+	bytes_tosend = read(receiverfd, response, sizeof(response));
+	if(bytes_tosend <= 0) {
+		printf("Read %d bytes, closing connection\n", bytes_tosend);
+		close(tunfd);
+		close(receiverfd);
+		return -1;
+	}
+	printf("Read %d bytes from other host\n", bytes_tosend);
+
 	size_t bytes_written = write(tunfd, response, bytes_tosend);
 	if(bytes_written > 0) {
 		printf("Written %d bytes\n", bytes_written);
 	}
-	*/
 
+	return 0;
+}
+
+/**
+ * Listen for connections on unix socket and connect to receiver.py
+ * Returns the file descriptor of receiver.py
+ * Note: receiver must be running and trying to connect!
+ */
+int connectWithReceiver() {
+	int serverfd, receiverfd, len;
+	struct sockaddr_un server_addr, client_addr;
+	
+	if((serverfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+		printf("Receiver socket error\n");
+		exit(1);
+	}
+	server_addr.sun_family = AF_UNIX;
+	strcpy(server_addr.sun_path, "/tmp/ipol_recv");
+	unlink(server_addr.sun_path);
+	len = strlen(server_addr.sun_path) + sizeof(server_addr.sun_family);
+	bind(serverfd, (struct sockaddr*)&server_addr, len);
+	listen(serverfd, 1);
+	len = sizeof(struct sockaddr_un);
+	receiverfd = accept(serverfd, (struct sockaddr*)&client_addr, &len);
+
+	if(receiverfd < 0) {
+		printf("Error getting a connection from receiver\n");
+		exit(1);
+	}
+	return receiverfd;
+}
+
+/**
+ * Connects to the sender.py unix socket.
+ * Returns the file descriptor of the connection with sender.py
+ * Note: sender server must be initialized
+ */
+int connectWithSender() {
+	int senderfd;
+	struct sockaddr_un server_addr;
+	char *server_path = "/tmp/ipol_send";
+
+	if((senderfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+		printf("Sender socket error\n");
+		exit(1);
+	}
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sun_family = AF_UNIX;
+	strncpy(server_addr.sun_path, server_path, sizeof(server_addr.sun_path)-1);
+
+	if(connect(senderfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+		printf("Error connecting to server\n");
+		exit(1);
+	}
+	return senderfd;
 }
 
 /**
@@ -85,6 +147,7 @@ int tun_alloc(char *dev, int flags) {
 	}
 
 	if((err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0) {
+		printf("Error %d", err);
 		close(fd);
 		return -2;
 	}
@@ -115,7 +178,7 @@ int main() {
 	int tunfd; // File descriptor for the tun0 interface
 	int receiverfd; // File descriptor for the receiver.py
 	int senderfd; // File descriptor for the sender.py
-	int maxfd;
+	int maxfd; // For the select method
 	char setup[100], tun_name[IFNAMSIZ], host_ip[15], peer_ip[15];
 	fd_set fdset; // Used to know when tunfd or receiverfd are ready for reading
 	struct timeval timev;
@@ -126,6 +189,7 @@ int main() {
 	if(receiver_pid == 0) {
 		startIPoLReceiver();
 	}
+	sleep(1);
 	int sender_pid = fork();
 	if(sender_pid == 0) {
 		startIPoLSender();
@@ -134,24 +198,8 @@ int main() {
 
 	sleep(1);
 
-	///////
-	// Connect with sending script
-	struct sockaddr_un server_addr;
-	char *server_path = "/tmp/ipol_send";
-	if((senderfd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
-		printf("Sender socket error\n");
-		exit(1);
-	}
-	memset(&server_addr, 0, sizeof(server_addr));
-	server_addr.sun_family = AF_UNIX;
-	strncpy(server_addr.sun_path, server_path, sizeof(server_addr.sun_path)-1);
-
-	if(connect(senderfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-		printf("Error connecting to server");
-		exit(1);
-	}
-	///////
-
+	receiverfd = connectWithReceiver();
+	senderfd = connectWithSender();
 
 	///////
 	// Setup interface 
@@ -166,39 +214,46 @@ int main() {
 	sprintf(setup, "sudo ip link set %s mtu 500 up", tun_name);
 	system(setup);
 
-	printf("IP: %s\n", getenv("HOST_IP"));
-	printf("IP: %s\n", getenv("PEER_IP"));
 	sprintf(host_ip, getenv("HOST_IP")); // Set in .bashrc
 	sprintf(peer_ip, getenv("PEER_IP")); // Set in .bashrc
 	sprintf(setup, "sudo ip addr add %s dev %s peer %s", host_ip, tun_name, peer_ip);
 	system(setup);
 	///////
 
-	// maxfd = (tunfd > receiverfd)?tunfd:receiverfd;
+	maxfd = (tunfd > receiverfd)?tunfd:receiverfd;
 
 	while(1) {
 		FD_ZERO(&fdset);
 		FD_SET(tunfd, &fdset);
-		// FD_SET(receiverfd, &tunfdset);
+		FD_SET(receiverfd, &fdset);
 
 		timev.tv_sec = 0;
 		timev.tv_usec = 0;
 
-		// select(maxfd+1
-		if(select(tunfd+1, &fdset, NULL, NULL, &timev) < 0) {
+		if(select(maxfd+1, &fdset, NULL, NULL, &timev) < 0) {
 			close(tunfd);
+			close(receiverfd);
+			close(senderfd);
 			exit(1);
 		}
 
 		if(FD_ISSET(tunfd, &fdset)) {
-			sendPacket(tunfd, senderfd);
+			if(sendPacket(tunfd, senderfd) < 0)
+			{
+				return 0;
+			}
 		}
 
-		//if(FD_ISSET(receiverfd, &fdset)) {
-		//	recvPacket();
-		//}
+		if(FD_ISSET(receiverfd, &fdset)) {
+			if(recvPacket(tunfd, receiverfd) < 0)
+			{
+				return 0;
+			}
+		}
 	}
 
+	close(receiverfd);
+	close(senderfd);
 	close(tunfd);
 	return 0;
 }
