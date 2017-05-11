@@ -59,6 +59,7 @@ int recvPacket(int tunfd, int receiverfd) {
 	}
 	printf("Read %d bytes from other host\n", bytes_tosend);
 
+	// Transfer to tun0
 	size_t bytes_written = write(tunfd, response, bytes_tosend);
 	if(bytes_written > 0) {
 		printf("Written %d bytes\n", bytes_written);
@@ -182,6 +183,8 @@ int main() {
 	char setup[100], tun_name[IFNAMSIZ], host_ip[15], peer_ip[15];
 	fd_set fdset; // Used to know when tunfd or receiverfd are ready for reading
 	struct timeval timev;
+
+	int ret = remove("/tmp/ipol.log"); // Delete the old logger if exists
 
 	///////
 	// Init receiver and sender scripts

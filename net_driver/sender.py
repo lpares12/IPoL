@@ -3,10 +3,11 @@ import socket
 import sys
 import os
 import time
-
+import logging
 import struct
 
-NAME = '(SENDER)'
+def sendToPeer(fd):
+	ipolsock.sendall(packet)
 
 def sizeToInt(received):
 	data = bytearray(received)
@@ -15,32 +16,51 @@ def sizeToInt(received):
 		num += byte << (offset *8)
 	return num
 
+#################
+# Setup Logger
+logger = logging.getLogger('sender')
+handler = logging.FileHandler('/tmp/ipol.log')
+if len(sys.argv) >= 2:
+	if str(sys.argv[1]) == 'debug':
+		logger.setLevel(logging.DEBUG)
+		handler.setLevel(logging.DEBUG)
+	elif str(sys.argv[1]) == 'info':
+		logger.setLevel(logging.INFO)
+		handler.setLevel(logging.INFO)
+else:
+	logger.setLevel(logging.WARNING)
+	handler.setLevel(logging.WARNING)
+#
+logger.setLevel(logging.DEBUG)
+handler.setLevel(logging.DEBUG)
+#
+formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] %(message)s', '%H:%M:%S')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+###################
 
-def log(file, text):
-	file.write('[' + str(time.strftime("%H:%M:%S")) + ']('+NAME+') ' + str(text) + '\n')
-
-logFile = open("/tmp/ipol_sender.log", "w")
-
+###################
+# Create the linux socket
 tuncAddress = '/tmp/ipol_send'
-
-# Make sure the socket does not already exist
 try:
-    os.unlink(tuncAddress)
-    log(logFile, 'Correctly unlinked')
+	os.unlink(tuncAddress) # Make sure the unix socket does not already exist
+	logger.debug('%s unlinked', tuncAddress)
 except OSError:
-	log(logFile, 'Problem unlinking')
-
-tuncfd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+	logger.debug('Nothing to unlink')
+tuncfd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) # AF_UNIX = Unix Socket
 tuncfd.bind(tuncAddress)
-tuncfd.listen(1)
-log(logFile, 'Listening on ' + tuncAddress)
+tuncfd.listen(1) # Accept only 1 connection
+###################
 
 try:
-	log(logFile, 'Waiting for a connection to ' + tuncAddress)
+	##################
+	# Accept a connection from tunc
+	logger.info('Waiting for a connection to %s', str(tuncAddress))
 	connection, client_address = tuncfd.accept()
-	log(logFile, 'Connection from ' + tuncAddress)
-	try:
+	logger.info('Connection from %s at %s', str(client_address), str(tuncAddress))
+	#################
 
+	try:
 		######################
 		# Connect to IPoL server (this won't be necessay for IPoL, since it will be connectionless)
 		ipolsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,37 +68,52 @@ try:
 		while True:
 			try:
 				ipolsock.connect(serverAddress)
-				log(logFile, 'Connected to IPoL server at: ' + str(serverAddress))
 				break
 			except Exception, e:
-				log(logFile, 'Error connecting to IPoL server ' + str(e))
+				logger.warning('Can not connect to IP server: %s', str(e))
 				time.sleep(1)
-		######################
+		logger.info('Connected to IP server at %s', str(serverAddress))
+		###################### To delete this block when integrated the true IPoL <
 
 		######################
 		# Read data from tunc
 		while True:
-			log(logFile, 'Waiting to receive packet size')
-			sizeNet = connection.recv(4, socket.MSG_WAITALL) # expect size_t (4 bytes)
+			# Receive the size of the packet
+			try:
+				sizeNet = connection.recv(4, socket.MSG_WAITALL) # expect size_t (4 bytes)
+				# if str(len(sizeNet)) != 4: # Todo: get the byte length correctly
+				# 	raise Exception('Received a size packet smaller than 4 bytes')
+			except Exception, e:
+				logger.error('Problem receiving size packet: %s', str(e))
+				sys.exit()
+			# Receive the packet
 			sizeInt = sizeToInt(sizeNet)
+			logger.debug('Expecting a packet of size %s', str(sizeInt))
 
-			log(logFile, 'Waiting to receive packet of size: ' + str(sizeInt) + 'bytes')
-			packet = connection.recv(sizeInt, socket.MSG_WAITALL)
-			if not packet or len(packet) == 0:
-				break
-			log(logFile, 'Received: ' + str(len(packet)) + 'bytes')
+			try:
+				packet = connection.recv(sizeInt, socket.MSG_WAITALL)
+				if not packet or len(packet) == 0: # If packet is empty the pipe is broken
+					raise Exception('Received an empty packet (could be a disconnection')
+				# if str(len(packet)) != sizeInt: # Todo: get the byte length correctly
+				# 	raise Exception('Received less bytes than expected')
+			except Exception, e:
+				logger.error('Problem receiving data packet: %s', str(e))
+				sys.exit()
+
+			logger.debug('Received the packet correctly')
 
 			###################
 			# Send to IPoL server
-			error = ipolsock.sendall(packet)
+			sendToPeer(ipolsock)
 			##########
 	except Exception, e:
-		print e
-		log(logFile, 'Error in the connection')
+		logger.error('Error somewhere: ', str(e))
 	finally:
+		logger.info('Ending sender')
 		ipolsock.close()
 		connection.close()
-except socket.error, msg:
-	log(logFile, 'Error connecting to ' + tuncAddress + ': ' + str(msg))
+
+except Exception, e:
+	logger.info('Error accepting connection to %s: %s', str(tuncAddress), str(e)) # If there was a failure accepting the connection
 finally:
-	logFile.close()
+	tuncfd.close()
