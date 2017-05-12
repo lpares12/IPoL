@@ -66,7 +66,7 @@ try:
 	#################
 	# Wait for data from IPoL
 	while True:
-		data = connection.recv(84, socket.MSG_WAITALL)
+		data = connection.recv(500)
 		if len(data) == 0:
 			raise Exception('Received an empty packet (could be a disconnection')
 		logger.info('Received a packet of size %s', str(len(data)))

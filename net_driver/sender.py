@@ -6,8 +6,8 @@ import time
 import logging
 import struct
 
-def sendToPeer(fd):
-	ipolsock.sendall(packet)
+def sendToPeer(fd, data):
+	fd.sendall(data)
 
 def sizeToInt(received):
 	data = bytearray(received)
@@ -104,7 +104,7 @@ try:
 
 			###################
 			# Send to IPoL server
-			sendToPeer(ipolsock)
+			sendToPeer(ipolsock, packet)
 			##########
 	except Exception, e:
 		logger.error('Error somewhere: ', str(e))
