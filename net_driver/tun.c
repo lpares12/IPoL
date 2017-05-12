@@ -21,6 +21,7 @@ int sendPacket(int tunfd, int senderfd) {
 	
 	size_t bytes_tosend;
 	char toSend[500]; // MTU_SIZE
+
 	// Whenever a packet is sent through tun0, we intercept it
 	bytes_tosend = read(tunfd, toSend, sizeof(toSend));
 	if(bytes_tosend < 0) {
@@ -31,11 +32,12 @@ int sendPacket(int tunfd, int senderfd) {
 	}
 	printf("Read %d bytes\n", bytes_tosend);
 
-	// Sending size of the packet
-	write(senderfd, (void *)&bytes_tosend, sizeof(bytes_tosend)); // size_t is 4 bytes at rpi
 	// Sending the packet
 	size_t bytes_written = write(senderfd, toSend, bytes_tosend);
-	printf("Bytes written: %zu\n", bytes_written);
+	if(bytes_written != bytes_tosend) {
+		printf("Wrote less bytes than expected\n");
+		return -2;
+	}
 
 	return 0;
 }
@@ -165,12 +167,15 @@ int tun_alloc(char *dev, int flags) {
 }
 
 /**
- * Function to initialize the IPoL receiver.
+ * Method to initialize the IPoL receiver.
  */
 void startIPoLReceiver() {
 	execlp("python", "python", "/tfg/net_driver/receiver.py", NULL);
 }
 
+/**
+ * Method to initialize the IPoL sender.
+ */
 void startIPoLSender() {
 	execlp("python", "python", "/tfg/net_driver/sender.py", NULL);
 }
@@ -184,7 +189,7 @@ int main() {
 	fd_set fdset; // Used to know when tunfd or receiverfd are ready for reading
 	struct timeval timev;
 
-	int ret = remove("/tmp/ipol.log"); // Delete the old logger if exists
+	remove("/tmp/ipol.log"); // Delete the old logger if exists
 
 	///////
 	// Init receiver and sender scripts
@@ -192,7 +197,6 @@ int main() {
 	if(receiver_pid == 0) {
 		startIPoLReceiver();
 	}
-	sleep(1);
 	int sender_pid = fork();
 	if(sender_pid == 0) {
 		startIPoLSender();
@@ -207,7 +211,7 @@ int main() {
 	///////
 	// Setup interface 
 	strcpy(tun_name, "tun0");
-	// Allocate a tun interface without added bytes to the IP packet
+	// Allocate a tun interface (without added bytes to the IP packet)
 	tunfd = tun_alloc(tun_name, IFF_TUN | IFF_NO_PI);
 	if(tunfd < 0) {
 		printf("File descriptor error: %d\n", tunfd);
@@ -243,6 +247,9 @@ int main() {
 		if(FD_ISSET(tunfd, &fdset)) {
 			if(sendPacket(tunfd, senderfd) < 0)
 			{
+				close(tunfd);
+				close(senderfd);
+				close(receiverfd);
 				return 0;
 			}
 		}
@@ -250,6 +257,9 @@ int main() {
 		if(FD_ISSET(receiverfd, &fdset)) {
 			if(recvPacket(tunfd, receiverfd) < 0)
 			{
+				close(tunfd);
+				close(senderfd);
+				close(receiverfd);
 				return 0;
 			}
 		}

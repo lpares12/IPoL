@@ -5,9 +5,57 @@ import os
 import time
 import logging
 import struct
+import threading
 
-def sendToPeer(fd, data):
-	fd.sendall(data)
+#################
+# Setup Logger
+logger = logging.getLogger('Sender')
+workerLogger = logging.getLogger('SenderWorker')
+handler = logging.FileHandler('/tmp/ipol.log')
+if len(sys.argv) >= 2:
+	if str(sys.argv[1]) == 'debug':
+		logger.setLevel(logging.DEBUG)
+		workerLogger.setLevel(logging.DEBUG)
+	elif str(sys.argv[1]) == 'info':
+		logger.setLevel(logging.INFO)
+		workerLogger.setLevel(logging.DEBUG)
+else:
+	logger.setLevel(logging.WARNING)
+	workerLogger.setLevel(logging.DEBUG)
+#
+logger.setLevel(logging.DEBUG)
+workerLogger.setLevel(logging.DEBUG)
+#
+formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] %(message)s', '%H:%M:%S')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+workerLogger.addHandler(handler)
+###################
+
+#################
+# Create a packet queue to store the packets to send
+packetQueue = [] # This variable WILL be protected
+packetQueueCond = threading.Condition()
+#################
+
+def senderWorker(queueCond):
+	global packetQueue
+	logger = logging.getLogger('SenderWorker')
+	logger.info('Initialised')
+	while True:
+		queueCond.acquire()
+		while len(packetQueue) == 0:
+			queueCond.wait()
+		packet = packetQueue.pop(0)
+		queueCond.release()
+
+		logger.debug('Got a packet from queue')
+		# Todo: send packet data through Led
+		logger.debug('Packet sent')
+
+def sendToPeer(data):
+	checksum = checksum8(str(packet.encode('hex_codec')))
+	#fd.sendall(data)
 
 def sizeToInt(received):
 	data = bytearray(received)
@@ -16,28 +64,27 @@ def sizeToInt(received):
 		num += byte << (offset *8)
 	return num
 
-#################
-# Setup Logger
-logger = logging.getLogger('sender')
-handler = logging.FileHandler('/tmp/ipol.log')
-if len(sys.argv) >= 2:
-	if str(sys.argv[1]) == 'debug':
-		logger.setLevel(logging.DEBUG)
-		handler.setLevel(logging.DEBUG)
-	elif str(sys.argv[1]) == 'info':
-		logger.setLevel(logging.INFO)
-		handler.setLevel(logging.INFO)
-else:
-	logger.setLevel(logging.WARNING)
-	handler.setLevel(logging.WARNING)
-#
-logger.setLevel(logging.DEBUG)
-handler.setLevel(logging.DEBUG)
-#
-formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] %(message)s', '%H:%M:%S')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-###################
+def checksum8(data):
+	result = 0
+	fctr = 16
+
+	hexStr = "0123456789ABCDEF"
+
+	for value in data:
+		print value
+		index = hexStr.index(str(value).upper())
+		result += index * fctr
+		if fctr == 16:
+			fctr = 1
+		else:
+			fctr = 16
+
+	if fctr == 1:
+		return "Odd number of characters"
+	else:
+		result = (~(result & 0xff) + 1) & 0xff # result&0xff discards all bytes after low-end one
+		strResult = hexStr[result/16] + hexStr[result%16]
+		return strResult
 
 ###################
 # Create the linux socket
@@ -60,41 +107,21 @@ try:
 	logger.info('Connection from %s at %s', str(client_address), str(tuncAddress))
 	#################
 
-	try:
-		######################
-		# Connect to IPoL server (this won't be necessay for IPoL, since it will be connectionless)
-		ipolsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		serverAddress = (os.environ['PEER_REAL_IP'], int(os.environ['PEER_PORT']))
-		while True:
-			try:
-				ipolsock.connect(serverAddress)
-				break
-			except Exception, e:
-				logger.warning('Can not connect to IP server: %s', str(e))
-				time.sleep(1)
-		logger.info('Connected to IP server at %s', str(serverAddress))
-		###################### To delete this block when integrated the true IPoL <
+	#################
+	# Create the worker thread (the Led thing)
+	ipolWorker = threading.Thread(target=senderWorker, args=(packetQueueCond,))
+	ipolWorker.start()
+	#################
 
+	try:
 		######################
 		# Read data from tunc
 		while True:
-			# Receive the size of the packet
 			try:
-				sizeNet = connection.recv(4, socket.MSG_WAITALL) # expect size_t (4 bytes)
-				# if str(len(sizeNet)) != 4: # Todo: get the byte length correctly
-				# 	raise Exception('Received a size packet smaller than 4 bytes')
-			except Exception, e:
-				logger.error('Problem receiving size packet: %s', str(e))
-				sys.exit()
-			# Receive the packet
-			sizeInt = sizeToInt(sizeNet)
-			logger.debug('Expecting a packet of size %s', str(sizeInt))
-
-			try:
-				packet = connection.recv(sizeInt, socket.MSG_WAITALL)
-				if not packet or len(packet) == 0: # If packet is empty the pipe is broken
+				data = connection.recv(500)
+				if not data or len(data) == 0: # If packet is empty the pipe is broken
 					raise Exception('Received an empty packet (could be a disconnection')
-				# if str(len(packet)) != sizeInt: # Todo: get the byte length correctly
+				# if str(len(data)) != sizeInt: # Todo: get the byte length correctly
 				# 	raise Exception('Received less bytes than expected')
 			except Exception, e:
 				logger.error('Problem receiving data packet: %s', str(e))
@@ -103,17 +130,22 @@ try:
 			logger.debug('Received the packet correctly')
 
 			###################
-			# Send to IPoL server
-			sendToPeer(ipolsock, packet)
+			# Add the message to packet queue
+			packetQueueCond.acquire()
+			packetQueue.append(data)
+			packetQueueCond.notify()
+			packetQueueCond.release()
 			##########
+			
 	except Exception, e:
 		logger.error('Error somewhere: ', str(e))
 	finally:
 		logger.info('Ending sender')
-		ipolsock.close()
+		# ipolsock.close()
 		connection.close()
 
 except Exception, e:
 	logger.info('Error accepting connection to %s: %s', str(tuncAddress), str(e)) # If there was a failure accepting the connection
 finally:
 	tuncfd.close()
+

@@ -4,29 +4,75 @@ import sys
 import os
 import time
 import logging
+import threading
 
 #################
 # Setup Logger
-logger = logging.getLogger('receiver')
+logger = logging.getLogger('Receiver')
+workerLogger = logging.getLogger('ReceiverWorker')
 handler = logging.FileHandler('/tmp/ipol.log')
 if len(sys.argv) >= 2:
 	if str(sys.argv[1]) == 'debug':
 		logger.setLevel(logging.DEBUG)
-		handler.setLevel(logging.DEBUG)
+		workerLogger.setLevel(logging.DEBUG)
 	elif str(sys.argv[1]) == 'info':
 		logger.setLevel(logging.INFO)
-		handler.setLevel(logging.INFO)
+		workerLogger.setLevel(logging.INFO)
 else:
 	logger.setLevel(logging.WARNING)
-	handler.setLevel(logging.WARNING)
+	workerLogger.setLevel(logging.WARNING)
 #
 logger.setLevel(logging.DEBUG)
-handler.setLevel(logging.DEBUG)
+workerLogger.setLevel(logging.DEBUG)
 #
 formatter = logging.Formatter('[%(asctime)s][%(name)s][%(levelname)s] %(message)s', "%H:%M:%S")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+workerLogger.addHandler(handler)
 ###################
+
+#################
+# Create a packet queue to store the received packets
+packetQueue = [] # This variable WILL be protected
+packetQueueCond = threading.Condition()
+#################
+
+def checksum8(data):
+	result = 0
+	fctr = 16
+
+	hexStr = "0123456789ABCDEF"
+
+	for value in data:
+		index = hexStr.index(str(value).upper())
+		result += index * fctr
+		if fctr == 16:
+			fctr = 1
+		else:
+			fctr = 16
+
+	if fctr == 1:
+		return "Odd number of characters"
+	else:
+		result = (~(result & 0xff) + 1) & 0xff # result&0xff discards all bytes after low-end one
+		strResult = hexStr[result/16] + hexStr[result%16]
+		return strResult
+
+def receiverWorker(queueCond):
+	global packetQueue
+	logger = logging.getLogger('ReceiverWorker')
+	while True:
+		# TODO: interact with sensor, now we just fake it to be able to run it
+		data = 'AABB00DDFF' # this should be the received packet
+		receivedChecksum = 'F0' # this should be the received checksum
+		if checksum8(data) == receivedChecksum:
+			logger.info('Checksum correct')
+			queueCond.acquire()
+			packetQueue.append(data)
+			queueCond.notify()
+			queueCond.release()
+		time.sleep(5) # TODO: Remove
+
 
 ###################
 # Connect to tunc
@@ -42,35 +88,24 @@ while True:
 logger.info('Connected to tunc server at %s', str(tuncAddress))
 ###################
 
-####################
-# Set up IPoL server
-# Now we set up a basic TCP server to fake the IPol communication
-# TODO: Remove
-ipolsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-serverAddress = (os.environ['HOST_REAL_IP'], int(os.environ['HOST_PORT']))
-ipolsock.bind(serverAddress)
-ipolsock.listen(1)
-##################
-
-####################
-# Wait for messages from IPoL to transfer them to tunc
 try:
-	#################
-	# Wait for connection to IPoL
-	# TODO: Remove
-	logger.info('Waiting for a connection to IP server')
-	connection, peerAddress = ipolsock.accept()
-	logger.info('Connection from %s at IP server', str(peerAddress))
-	#################
+	###################
+	# Create the worker thread (the sensor thing)
+	ipolWorker = threading.Thread(target=receiverWorker, args=(packetQueueCond,))
+	ipolWorker.start()
+	###################
 
-	#################
+	####################
+	# Wait for messages from IPoL to transfer them to tunc
+	####################
 	# Wait for data from IPoL
 	while True:
-		data = connection.recv(500)
-		if len(data) == 0:
-			raise Exception('Received an empty packet (could be a disconnection')
-		logger.info('Received a packet of size %s', str(len(data)))
-		logger.info('Transfering %s bytes to tunc', str(len(data)))
+		packetQueueCond.acquire()
+		while len(packetQueue) == 0:
+			packetQueueCond.wait()
+		data = packetQueue.pop(0)
+		packetQueueCond.release()
+		logger.debug('Received a packet of size %s, transfering to tunc', str(len(data)))
 
 		#################
 		# Transfer data to tunc
@@ -80,12 +115,10 @@ try:
 				raise Exception("Sent 0 bytes to tunc")
 		except Exception, e:
 			logger.error('Sent 0 bytes to tunc (could be a disconnection)')
-			ipolsock.close()
 			tuncsocket.close()
 		################
-	#################
 except Exception, e:
-	logger.error('Problem in the connection: %s', str(e))
+	logger.error('Unknown error: %s', str(e))
 finally:
-	ipolsock.close()
-####################
+	tuncsocket.close()
+	logger.info('Ending receiver')
