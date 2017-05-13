@@ -2,9 +2,10 @@
 import socket
 import sys
 import os
-import time
+import time as t
 import logging
 import threading
+from ipol import *
 
 #################
 # Setup Logger
@@ -36,42 +37,19 @@ workerLogger.addHandler(handler)
 packetQueue = [] # This variable WILL be protected
 packetQueueCond = threading.Condition()
 #################
-
-def checksum8(data):
-	result = 0
-	fctr = 16
-
-	hexStr = "0123456789ABCDEF"
-
-	for value in data:
-		index = hexStr.index(str(value).upper())
-		result += index * fctr
-		if fctr == 16:
-			fctr = 1
-		else:
-			fctr = 16
-
-	if fctr == 1:
-		return "Odd number of characters"
-	else:
-		result = (~(result & 0xff) + 1) & 0xff # result&0xff discards all bytes after low-end one
-		strResult = hexStr[result/16] + hexStr[result%16]
-		return strResult
-
 def receiverWorker(queueCond):
 	global packetQueue
 	logger = logging.getLogger('ReceiverWorker')
+	bus = startIpolReceive()
 	while True:
-		# TODO: interact with sensor, now we just fake it to be able to run it
-		data = 'AABB00DDFF' # this should be the received packet
-		receivedChecksum = 'F0' # this should be the received checksum
-		if checksum8(data) == receivedChecksum:
-			logger.info('Checksum correct')
-			queueCond.acquire()
-			packetQueue.append(data)
-			queueCond.notify()
-			queueCond.release()
-		time.sleep(5) # TODO: Remove
+		# Receive data from IPoL
+		data = ipolReceive(bus)
+		logger.info('Packet Received')
+		queueCond.acquire()
+		packetQueue.append(data)
+		queueCond.notify()
+		queueCond.release()
+	endIpolReceive(bus)
 
 
 ###################
@@ -84,7 +62,7 @@ while True:
 		break
 	except Exception, e:
 		logger.warning('Can not connect to tunc server: %s', str(e))
-		time.sleep(1)
+		t.sleep(1)
 logger.info('Connected to tunc server at %s', str(tuncAddress))
 ###################
 

@@ -10,8 +10,12 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
+// For the unix sockets
 #include <sys/socket.h>
 #include <sys/un.h>
+// To change the priority
+#include <sys/time.h>
+#include <sys/resource.h>
 
 /**
  * Called whenever a reading operation is possible from tun0 file descriptor.
@@ -188,6 +192,8 @@ int main() {
 	char setup[100], tun_name[IFNAMSIZ], host_ip[15], peer_ip[15];
 	fd_set fdset; // Used to know when tunfd or receiverfd are ready for reading
 	struct timeval timev;
+
+	setpriority(PRIO_PROCESS, 0, -20);
 
 	remove("/tmp/ipol.log"); // Delete the old logger if exists
 

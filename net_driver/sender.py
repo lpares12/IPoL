@@ -2,10 +2,9 @@
 import socket
 import sys
 import os
-import time
 import logging
-import struct
 import threading
+from ipol import *
 
 #################
 # Setup Logger
@@ -41,6 +40,7 @@ packetQueueCond = threading.Condition()
 def senderWorker(queueCond):
 	global packetQueue
 	logger = logging.getLogger('SenderWorker')
+	startIpolSend()
 	logger.info('Initialised')
 	while True:
 		queueCond.acquire()
@@ -51,6 +51,7 @@ def senderWorker(queueCond):
 
 		logger.debug('Got a packet from queue')
 		# Todo: send packet data through Led
+		ipolSend(packet)
 		logger.debug('Packet sent')
 
 def sendToPeer(data):
@@ -141,11 +142,11 @@ try:
 		logger.error('Error somewhere: ', str(e))
 	finally:
 		logger.info('Ending sender')
-		# ipolsock.close()
 		connection.close()
 
 except Exception, e:
 	logger.info('Error accepting connection to %s: %s', str(tuncAddress), str(e)) # If there was a failure accepting the connection
 finally:
 	tuncfd.close()
+	logger.info('Ending sender')
 
