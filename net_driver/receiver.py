@@ -36,12 +36,15 @@ workerLogger.addHandler(handler)
 # Create a packet queue to store the received packets
 packetQueue = [] # This variable WILL be protected
 packetQueueCond = threading.Condition()
+
 #################
 def receiverWorker(queueCond):
 	global packetQueue
 	logger = logging.getLogger('ReceiverWorker')
 	bus = startIpolReceive()
+	logger.info('Initialised')
 	while True:
+		logger.info('Waiting to receive')
 		# Receive data from IPoL
 		data = ipolReceive(bus)
 		logger.info('Packet Received')
@@ -51,6 +54,12 @@ def receiverWorker(queueCond):
 		queueCond.release()
 	endIpolReceive(bus)
 
+###################
+# Create the worker thread (the sensor thing)
+ipolWorker = threading.Thread(name='Receiver Worker', target=receiverWorker, args=(packetQueueCond,))
+ipolWorker.daemon = True
+ipolWorker.start()
+###################
 
 ###################
 # Connect to tunc
@@ -67,12 +76,6 @@ logger.info('Connected to tunc server at %s', str(tuncAddress))
 ###################
 
 try:
-	###################
-	# Create the worker thread (the sensor thing)
-	ipolWorker = threading.Thread(target=receiverWorker, args=(packetQueueCond,))
-	ipolWorker.start()
-	###################
-
 	####################
 	# Wait for messages from IPoL to transfer them to tunc
 	####################
@@ -94,9 +97,14 @@ try:
 		except Exception, e:
 			logger.error('Sent 0 bytes to tunc (could be a disconnection)')
 			tuncsocket.close()
+		finally:
+			tuncsocket.close()
+			logger.info('Ending receiver')
+			sys.exit()
 		################
 except Exception, e:
 	logger.error('Unknown error: %s', str(e))
 finally:
 	tuncsocket.close()
 	logger.info('Ending receiver')
+	sys.exit()

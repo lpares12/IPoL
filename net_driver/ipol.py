@@ -6,12 +6,14 @@ from time import time, sleep
 
 ##########
 # Settings
-INTEGRATION_TIME = 0.10 # TODO: Change
-INTEGRATION_TIME_WITH_OFFSET = 0.10 # TODO: Change
-LOWER_THRESHOLD = 215
-UPPER_THRESHOLD = 220
+INTEGRATION_TIME = 0.15 # TODO: Change
+INTEGRATION_TIME_WITH_OFFSET = 0.152 # TODO: Change
+LOWER_THRESHOLD = 338
+UPPER_THRESHOLD = 343
 
 LED_PIN = 18
+
+RESYNC_BYTES = 8
 
 # I2C address of the TSL2561 sensor
 TSL2561_ADDRESS = 0x39
@@ -89,12 +91,15 @@ def checksum8(data):
 
 def startIpolReceive():
 	bus = smbus.SMBus(1)
-	# if not begin(bus):
-	# 	print "Sensor not found"
-	# 	bus = None
-	# else:
-	# 	enable(bus)
-	enable(bus)
+	if not begin(bus):
+		print "Sensor not found"
+		return None
+	else:
+		enable(bus)
+
+	startIntegration(bus)
+	sleep(0.01)
+	stopIntegration(bus)
 	return bus
 
 def endIpolReceive(bus):
@@ -140,7 +145,7 @@ def ipolSend(data):
 	# Send packet
 	resync = 0
 	for byte in data:
-		if resync == 4:
+		if resync == RESYNC_BYTES:
 			resync = 0
 			# Send resync bit wait for INTEGRATION_TIME, to let the receiver catch up
 			sleep(INTEGRATION_TIME)
@@ -202,7 +207,7 @@ def ipolReceive(bus):
 			# Receive packet, every 4 bytes we will resync with the sender
 			resync = 0
 			for i in range(size):
-				if resync == 4:
+				if resync == RESYNC_BYTES:
 					sleep(INTEGRATION_TIME/2)
 					resync = 0
 					lastbit = 1
@@ -218,8 +223,6 @@ def ipolReceive(bus):
 					resync += 1
 				byte, lastbit = ipolReceiveByte(bus, lastbit)
 				ret += chr(byte)
-
-			print "OUTSIDE FOR"
 
 			file = open('/tmp/receivedfile', 'wb')
 			file.write(ret)

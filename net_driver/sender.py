@@ -54,10 +54,6 @@ def senderWorker(queueCond):
 		ipolSend(packet)
 		logger.debug('Packet sent')
 
-def sendToPeer(data):
-	checksum = checksum8(str(packet.encode('hex_codec')))
-	#fd.sendall(data)
-
 def sizeToInt(received):
 	data = bytearray(received)
 	num = 0
@@ -65,27 +61,12 @@ def sizeToInt(received):
 		num += byte << (offset *8)
 	return num
 
-def checksum8(data):
-	result = 0
-	fctr = 16
-
-	hexStr = "0123456789ABCDEF"
-
-	for value in data:
-		print value
-		index = hexStr.index(str(value).upper())
-		result += index * fctr
-		if fctr == 16:
-			fctr = 1
-		else:
-			fctr = 16
-
-	if fctr == 1:
-		return "Odd number of characters"
-	else:
-		result = (~(result & 0xff) + 1) & 0xff # result&0xff discards all bytes after low-end one
-		strResult = hexStr[result/16] + hexStr[result%16]
-		return strResult
+#################
+# Create the worker thread (the Led thing)
+ipolWorker = threading.Thread(name='SenderWorker', target=senderWorker, args=(packetQueueCond,))
+ipolWorker.daemon = True
+ipolWorker.start()
+#################
 
 ###################
 # Create the linux socket
@@ -106,12 +87,6 @@ try:
 	logger.info('Waiting for a connection to %s', str(tuncAddress))
 	connection, client_address = tuncfd.accept()
 	logger.info('Connection from %s at %s', str(client_address), str(tuncAddress))
-	#################
-
-	#################
-	# Create the worker thread (the Led thing)
-	ipolWorker = threading.Thread(target=senderWorker, args=(packetQueueCond,))
-	ipolWorker.start()
 	#################
 
 	try:
@@ -149,4 +124,5 @@ except Exception, e:
 finally:
 	tuncfd.close()
 	logger.info('Ending sender')
+	sys.exit()
 
