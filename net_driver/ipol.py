@@ -7,9 +7,9 @@ from time import time, sleep
 ##########
 # Settings
 INTEGRATION_TIME = 0.15 # TODO: Change
-INTEGRATION_TIME_WITH_OFFSET = 0.152 # TODO: Change
-LOWER_THRESHOLD = 338
-UPPER_THRESHOLD = 343
+INTEGRATION_TIME_WITH_OFFSET = 0.1524 # TODO: Change
+LOWER_THRESHOLD = 353
+UPPER_THRESHOLD = 358
 
 LED_PIN = 18
 
@@ -91,11 +91,11 @@ def checksum8(data):
 
 def startIpolReceive():
 	bus = smbus.SMBus(1)
-	if not begin(bus):
-		print "Sensor not found"
-		return None
-	else:
-		enable(bus)
+	# if not begin(bus):
+	# 	print "Sensor not found"
+	# 	return None
+	# else:
+	enable(bus)
 
 	startIntegration(bus)
 	sleep(0.01)
@@ -146,13 +146,13 @@ def ipolSend(data):
 	resync = 0
 	for byte in data:
 		if resync == RESYNC_BYTES:
+			GPIO.output(LED_PIN, GPIO.LOW)
 			resync = 0
 			# Send resync bit wait for INTEGRATION_TIME, to let the receiver catch up
-			sleep(INTEGRATION_TIME)
+			sleep(2*INTEGRATION_TIME)
 			GPIO.output(LED_PIN, GPIO.HIGH)
 			sleep(INTEGRATION_TIME_WITH_OFFSET)
-		else:
-			resync += 1
+		resync += 1
 		ipolSendByte(ord(byte))
 
 	print "SENT!"
@@ -162,6 +162,12 @@ def ipolSend(data):
 
 	file = open('/tmp/sendfile', 'wb')
 	file.write(data)
+	file.close()
+
+	file = open('/tmp/sendfilebinary', 'wb')
+	for value in data:
+		file.write(("{0:b}".format(ord(value))))
+		file.write('\n')
 	file.close()
 
 def ipolReceiveByte(bus, lastbit = 0):
@@ -208,24 +214,28 @@ def ipolReceive(bus):
 			resync = 0
 			for i in range(size):
 				if resync == RESYNC_BYTES:
-					sleep(INTEGRATION_TIME/2)
 					resync = 0
 					lastbit = 1
-					# Wait for resync bit
-					while(True):
+					sleep(INTEGRATION_TIME/3)
+					while True:
 						startIntegration(bus)
 						sleep(INTEGRATION_TIME)
 						stopIntegration(bus)
-						resyncVal = getLuminosity(bus)
-						if resyncVal > LOWER_THRESHOLD:
+						if getLuminosity(bus) > UPPER_THRESHOLD:
 							break
-				else:
-					resync += 1
+				
 				byte, lastbit = ipolReceiveByte(bus, lastbit)
 				ret += chr(byte)
+				resync += 1
 
 			file = open('/tmp/receivedfile', 'wb')
 			file.write(ret)
+			file.close()
+
+			file = open('/tmp/receivedfilebinary', 'wb')
+			for value in ret:
+				file.write(("{0:b}".format(ord(value))))
+				file.write('\n')
 			file.close()
 
 			if checksum8(str(ret.encode('hex_codec'))) == checksum:

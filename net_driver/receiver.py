@@ -86,6 +86,9 @@ try:
 			packetQueueCond.wait()
 		data = packetQueue.pop(0)
 		packetQueueCond.release()
+
+		if len(data) <= 0:
+			continue
 		logger.debug('Received a packet of size %s, transfering to tunc', str(len(data)))
 
 		#################
@@ -97,9 +100,6 @@ try:
 		except Exception, e:
 			logger.error('Sent 0 bytes to tunc (could be a disconnection)')
 			tuncsocket.close()
-		finally:
-			tuncsocket.close()
-			logger.info('Ending receiver')
 			sys.exit()
 		################
 except Exception, e:

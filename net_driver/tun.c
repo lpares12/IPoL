@@ -58,17 +58,19 @@ int recvPacket(int tunfd, int receiverfd) {
 	// Read from receiver.py
 	bytes_tosend = read(receiverfd, response, sizeof(response));
 	if(bytes_tosend <= 0) {
-		printf("Read %d bytes, closing connection\n", bytes_tosend);
+		printf("Received %d bytes from receiver. This is a disconnection.\n", bytes_tosend);
 		close(tunfd);
 		close(receiverfd);
 		return -1;
 	}
-	printf("Read %d bytes from other host\n", bytes_tosend);
+	else {
+		printf("Received %d bytes from other host\n", bytes_tosend);
 
-	// Transfer to tun0
-	size_t bytes_written = write(tunfd, response, bytes_tosend);
-	if(bytes_written > 0) {
-		printf("Written %d bytes\n", bytes_written);
+		// Transfer to tun0
+		size_t bytes_written = write(tunfd, response, bytes_tosend);
+		if(bytes_written > 0) {
+			printf("Written %d bytes\n", bytes_written);
+		}
 	}
 
 	return 0;

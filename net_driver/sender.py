@@ -115,9 +115,13 @@ try:
 			
 	except Exception, e:
 		logger.error('Error somewhere: ', str(e))
-	finally:
-		logger.info('Ending sender')
+		logger.info('Ending server because of error')
 		connection.close()
+		tuncfd.close()
+		sys.exit()
+	# finally:
+	# 	logger.info('Ending sender')
+	# 	connection.close()
 
 except Exception, e:
 	logger.info('Error accepting connection to %s: %s', str(tuncAddress), str(e)) # If there was a failure accepting the connection
