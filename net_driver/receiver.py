@@ -38,6 +38,7 @@ packetQueue = [] # This variable WILL be protected
 packetQueueCond = threading.Condition()
 
 #################
+# Method that the worker will run to call ipolReceive()
 def receiverWorker(queueCond):
 	global packetQueue
 	logger = logging.getLogger('ReceiverWorker')
@@ -55,7 +56,7 @@ def receiverWorker(queueCond):
 	endIpolReceive(bus)
 
 ###################
-# Create the worker thread (the sensor thing)
+# Create the worker thread (the actual ipol receiver)
 ipolWorker = threading.Thread(name='Receiver Worker', target=receiverWorker, args=(packetQueueCond,))
 ipolWorker.daemon = True
 ipolWorker.start()

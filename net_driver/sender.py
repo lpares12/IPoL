@@ -37,6 +37,9 @@ packetQueue = [] # This variable WILL be protected
 packetQueueCond = threading.Condition()
 #################
 
+#################
+# Method that the worker will run to call ipolSend()
+# whenever a new packet from the queue is received
 def senderWorker(queueCond):
 	global packetQueue
 	logger = logging.getLogger('SenderWorker')
@@ -54,15 +57,8 @@ def senderWorker(queueCond):
 		ipolSend(packet)
 		logger.debug('Packet sent')
 
-def sizeToInt(received):
-	data = bytearray(received)
-	num = 0
-	for offset, byte in enumerate(data):
-		num += byte << (offset *8)
-	return num
-
 #################
-# Create the worker thread (the Led thing)
+# Create the worker thread (the actual ipol sender)
 ipolWorker = threading.Thread(name='SenderWorker', target=senderWorker, args=(packetQueueCond,))
 ipolWorker.daemon = True
 ipolWorker.start()

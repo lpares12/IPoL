@@ -21,8 +21,6 @@
  * Called whenever a reading operation is possible from tun0 file descriptor.
  */
 int sendPacket(int tunfd, int senderfd) {
-	printf("Ready to receive from tun0\n");
-	
 	size_t bytes_tosend;
 	char toSend[500]; // MTU_SIZE
 
@@ -34,7 +32,7 @@ int sendPacket(int tunfd, int senderfd) {
 		close(senderfd);
 		return -1;
 	}
-	printf("Read %d bytes\n", bytes_tosend);
+	printf("Received %d bytes from tun interface. Transfering to sender.py\n", bytes_tosend);
 
 	// Sending the packet
 	size_t bytes_written = write(senderfd, toSend, bytes_tosend);
@@ -50,8 +48,6 @@ int sendPacket(int tunfd, int senderfd) {
  * Called whenever a reading operation is possible from receiver.py.
  */
 int recvPacket(int tunfd, int receiverfd) {
-	printf("Ready to send to tun0\n");
-
 	char response[500];
 	size_t bytes_tosend;
 
@@ -69,7 +65,7 @@ int recvPacket(int tunfd, int receiverfd) {
 		// Transfer to tun0
 		size_t bytes_written = write(tunfd, response, bytes_tosend);
 		if(bytes_written > 0) {
-			printf("Written %d bytes\n", bytes_written);
+			printf("Transfered %d bytes to tun interface\n", bytes_written);
 		}
 	}
 
@@ -135,6 +131,7 @@ int connectWithSender() {
  * @param flags Flags to be set
  * @return file descriptor or error code
  * 
+ * Allocates the tun interface
  */
 int tun_alloc(char *dev, int flags) {
 	struct ifreq ifr;
@@ -186,6 +183,13 @@ void startIPoLSender() {
 	execlp("python", "python", "/tfg/net_driver/sender.py", NULL);
 }
 
+/**
+ * Initialize the monitor application.
+ */
+void startMonitor() {
+	execlp("python", "python", "/tfg/net_driver/monitor.py", NULL);
+}
+
 int main() {
 	int tunfd; // File descriptor for the tun0 interface
 	int receiverfd; // File descriptor for the receiver.py
@@ -200,6 +204,14 @@ int main() {
 	remove("/tmp/ipol.log"); // Delete the old logger if exists
 
 	///////
+	// Init the monitor
+	int monitor_pid = fork();
+	if(monitor_pid == 0) {
+		startMonitor();
+	}
+	///////
+
+	///////
 	// Init receiver and sender scripts
 	int receiver_pid = fork();
 	if(receiver_pid == 0) {
@@ -210,7 +222,6 @@ int main() {
 		startIPoLSender();
 	}
 	///////
-
 	sleep(1);
 
 	receiverfd = connectWithReceiver();
@@ -226,7 +237,7 @@ int main() {
 		exit(1);
 	}
 
-	sprintf(setup, "sudo ip link set %s mtu 500 up", tun_name);
+	sprintf(setup, "sudo ip link set %s mtu 256 up", tun_name);
 	system(setup);
 
 	sprintf(host_ip, getenv("HOST_IP")); // Set in .bashrc
@@ -252,6 +263,7 @@ int main() {
 			exit(1);
 		}
 
+		// Check if tun interface is ready to send data to us
 		if(FD_ISSET(tunfd, &fdset)) {
 			if(sendPacket(tunfd, senderfd) < 0)
 			{
@@ -262,6 +274,7 @@ int main() {
 			}
 		}
 
+		// Check if receiver.py is ready to send data to us
 		if(FD_ISSET(receiverfd, &fdset)) {
 			if(recvPacket(tunfd, receiverfd) < 0)
 			{
